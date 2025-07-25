@@ -146,12 +146,12 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         }
     }, [stepToEdit, actionDefinitions]);
 
-
     // handleSave, handleActionDefinitionChange, updateParameterBinding (same as previous response)
     const handleSave = () => {
         if (currentStep) {
             // Add validation here before saving if needed
             onSaveStep(currentStep);
+            console.log(currentStep.item);
             onClose(); // Close after saving
         }
     };
@@ -215,6 +215,12 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             };
         });
     }, []);
+
+    /*
+
+    Parameter Binding Issue
+
+    */
 
     const renderParameterInputs = (
         paramDef: SerializedActionParameterDefinition,
@@ -305,7 +311,8 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         paramDef={paramDef} // Make sure LiteralValueInput also handles paramDef.dataType correctly if needed
                         valueJson={valueSourceToRender.valueJson}
                         onChange={(newValueJson) => {
-                            updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: newValueJson! });
+                            if (newValueJson) updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: JSON.parse(newValueJson)! });
+                            console.log(newValueJson);
                         }}
                     />
                 )}
@@ -359,6 +366,12 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
     // ... (Modal JSX structure: if (!currentStep) return null; etc. as before) ...
     if (!currentStep) return null;
+
+    /*
+
+    Possible Issue: The modal for Action Flow Step is not saving the data
+
+    */
 
     return (
         <Modal
@@ -559,6 +572,12 @@ const ActionFlowBuilder: React.FC<ActionFlowBuilderProps> = ({
         });
     };
 
+    /*
+
+    Possible Issue on Save Function
+
+    */
+
     const handleSaveStepDetails = (updatedStep: ActionStep) => {
         const existingSteps = actionFlow?.steps || [];
         onActionFlowChange({
@@ -646,6 +665,11 @@ const ActionFlowBuilder: React.FC<ActionFlowBuilderProps> = ({
                 </Box>
             </Stack>
 
+            {/*
+                    
+            Issue i nthe onSaveStep Function
+
+            */}
             {isDetailModalOpen && stepToEdit && ( // Ensure stepToEdit is not null
                 <ActionDetailModal
                     opened={isDetailModalOpen}
