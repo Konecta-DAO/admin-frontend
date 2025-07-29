@@ -215,12 +215,6 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         });
     }, []);
 
-    /*
-
-    Parameter Binding Issue
-
-    */
-
     const renderParameterInputs = (
         paramDef: SerializedActionParameterDefinition,
         currentValueSource: ParameterValueSource | undefined,
@@ -364,12 +358,6 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
     // ... (Modal JSX structure: if (!currentStep) return null; etc. as before) ...
     if (!currentStep) return null;
-
-    /*
-
-    Possible Issue: The modal for Action Flow Step is not saving the data
-
-    */
 
     return (
         <Modal
@@ -570,12 +558,6 @@ const ActionFlowBuilder: React.FC<ActionFlowBuilderProps> = ({
         });
     };
 
-    /*
-
-    Possible Issue on Save Function
-
-    */
-
     const handleSaveStepDetails = (updatedStep: ActionStep) => {
         const existingSteps = actionFlow?.steps || [];
         onActionFlowChange({
@@ -663,11 +645,6 @@ const ActionFlowBuilder: React.FC<ActionFlowBuilderProps> = ({
                 </Box>
             </Stack>
 
-            {/*
-                    
-            Issue i nthe onSaveStep Function
-
-            */}
             {isDetailModalOpen && stepToEdit && ( // Ensure stepToEdit is not null
                 <ActionDetailModal
                     opened={isDetailModalOpen}

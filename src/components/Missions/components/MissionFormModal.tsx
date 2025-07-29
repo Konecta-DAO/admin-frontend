@@ -512,11 +512,7 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                     )}
 
                     <Divider label="Action Flow Configuration" labelPosition="center" my="md" />
-                    {/*
-                    
-                    Issue on ActionFlowBuilder component
 
-                    */}
                     {isClient ? (
                         <ActionFlowBuilder
                             actionFlow={form.values.actionFlow}
