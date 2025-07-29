@@ -151,7 +151,6 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         if (currentStep) {
             // Add validation here before saving if needed
             onSaveStep(currentStep);
-            console.log(currentStep.item);
             onClose(); // Close after saving
         }
     };
@@ -312,7 +311,6 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         valueJson={valueSourceToRender.valueJson}
                         onChange={(newValueJson) => {
                             if (newValueJson) updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: JSON.parse(newValueJson)! });
-                            console.log(newValueJson);
                         }}
                     />
                 )}

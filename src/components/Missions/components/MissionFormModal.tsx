@@ -303,8 +303,6 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
             ...missionFormValuesBase
         } = values;
 
-        console.log(actionFlow);
-
         let finalBackendRewardType: RewardType;
 
         switch (rewardTypeSelection) {
@@ -400,8 +398,6 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                 ...(missionIdForSubmission !== undefined ? { id: missionIdForSubmission } : {}),
                 ...dataToSubmit,
             };
-
-            console.log(dataToSubmit.actionFlowJson)
 
             await onSubmit(submissionPayload as any, filesToUpload); // Cast to any if strict type checking on Omit keys is too complex here
 
