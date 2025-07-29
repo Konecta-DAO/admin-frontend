@@ -146,7 +146,6 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         }
     }, [stepToEdit, actionDefinitions]);
 
-
     // handleSave, handleActionDefinitionChange, updateParameterBinding (same as previous response)
     const handleSave = () => {
         if (currentStep) {
@@ -305,7 +304,7 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         paramDef={paramDef} // Make sure LiteralValueInput also handles paramDef.dataType correctly if needed
                         valueJson={valueSourceToRender.valueJson}
                         onChange={(newValueJson) => {
-                            updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: newValueJson! });
+                            if (newValueJson) updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: JSON.parse(newValueJson)! });
                         }}
                     />
                 )}

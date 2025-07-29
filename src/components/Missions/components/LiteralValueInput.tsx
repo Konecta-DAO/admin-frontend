@@ -68,7 +68,7 @@ const LiteralValueInput: React.FC<LiteralValueInputProps> = ({ paramDef, valueJs
             }
         } catch (e) {
             console.error(`Error parsing valueJson for ${paramDef.name} (${currentTypeString}):`, valueJson, e);
-            setParseError(`Invalid current JSON. Error: ${(e as Error).message}. Using raw value.`);
+            // setParseError(`Invalid current JSON. Error: ${(e as Error).message}. Using raw value.`);
             setInputValue(valueJson); // Fallback to raw string if parsing fails
         }
     }, [valueJson, paramDef.name, paramDef.dataType]); // paramDef.dataType is an object; re-run if its identity changes
