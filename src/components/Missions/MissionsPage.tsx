@@ -94,6 +94,7 @@ const MissionsPage: React.FC = () => {
     const [editingMission, setEditingMission] = useState<SerializedMission | null>(null);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [viewingMission, setViewingMission] = useState<SerializedMission | null>(null);
+    const [isLoadingDelete, setIsLoadingDelete] = useState(false);
     const [showGeneratedCodeModal, setShowGeneratedCodeModal] = useState(false);
     const [generatedCodeInfo, setGeneratedCodeInfo] = useState<GeneratedCodeInfo | null>(null);
     const [isSubmittingForm, setIsSubmittingForm] = useState(false);
@@ -388,11 +389,28 @@ const MissionsPage: React.FC = () => {
     };
 
     const handleDeleteMission = async (missionId: bigint) => {
+        setIsLoadingDelete(true);
+        
         if (!projectId || !projectActor) {
             notifications.show({ title: 'Error', message: 'Project actor or Project ID context is missing.', color: 'red' });
             return;
         }
-        notifications.show({ title: 'Placeholder', message: `Delete logic for mission ${missionId} not implemented.`, color: 'yellow' });
+        
+        try {
+            const result = await projectActor.deleteMission(missionId) as Result_1;
+            
+            if (result && 'err' in result) {
+                throw new Error(String(result.err));
+            }
+            
+            await fetchMissions();
+        } catch (e) {
+            const error = e as Error;
+            console.error("Failed to delete mission:", error);
+            notifications.show({ title: 'Error Deleting Mission', message: `An unknown error occurred while deleting mission with ID ${missionId}.`, color: 'red' });
+        }
+
+        setIsLoadingDelete(false);
     };
 
     const getStatusColor = (statusObject: MissionStatus) => {
@@ -459,7 +477,7 @@ const MissionsPage: React.FC = () => {
                 <Group gap={4} justify="flex-end" wrap="nowrap">
                     <Tooltip label="View Details" withArrow><ActionIcon variant="subtle" onClick={() => handleOpenViewModal(mission)}><IconEye size={16} /></ActionIcon></Tooltip>
                     <Tooltip label="Edit Mission" withArrow><ActionIcon variant="subtle" color="blue" onClick={() => handleOpenEditModal(mission)}><IconPencil size={16} /></ActionIcon></Tooltip>
-                    <Tooltip label="Delete Mission" withArrow><ActionIcon variant="subtle" color="red" onClick={() => handleDeleteMission(mission.id)}><IconTrash size={16} /></ActionIcon></Tooltip>
+                    <Tooltip label="Delete Mission" withArrow><ActionIcon variant="subtle" color="red" loading={isLoadingDelete} onClick={() => handleDeleteMission(mission.id)}><IconTrash size={16} /></ActionIcon></Tooltip>
                 </Group>
             </Table.Td>
         </Table.Tr>
@@ -533,6 +551,16 @@ const MissionsPage: React.FC = () => {
                 id={viewingMission ? viewingMission.id : null}
                 projectId={projectId}
             />
+            
+            {/*
+            <MissionDeleteModal
+                opened={isDeleteModalOpen}
+                onClose={handleCloseDeleteModal}
+                onSubmit={handleDeleteMission}
+                id={deletingMission ? deletingMission.id : null}
+                projectId={projectId}
+            />
+            */}
 
             {generatedCodeInfo && (
                 <Modal
