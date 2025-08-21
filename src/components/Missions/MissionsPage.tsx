@@ -1,3 +1,4 @@
+// src/components/Missions/MissionsPage.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom'; // Import useNavigate
 import {
@@ -23,6 +24,7 @@ import {
     Result_1,
     ImageUploadInput, // Import the new type
 } from '../../declarations/projectCanister/test_backend.did.js';
+import { idlFactory as icrc1IDLFactory } from '../../declarations/icp_ledger/index.js';
 import { useAnalytics } from '../../contexts/AnalyticsContext.tsx'; // Import useAnalytics
 import { Principal } from '@dfinity/principal';
 import { SerializedActionDefinition } from '../../declarations/actionsCanister/actions.did.js';
@@ -265,6 +267,107 @@ const MissionsPage: React.FC = () => {
             return;
         }
 
+        const isEditing = missionInputData.id !== undefined && missionInputData.id !== null;
+
+        // --- PRE-FUNDING LOGIC FOR NEW TOKEN MISSIONS ---
+        if (missionInputData.rewardType && 'ICPToken' in missionInputData.rewardType && !isEditing) {
+            setIsSubmittingForm(true); // Set loading state immediately
+            if (!agent) {
+                notifications.show({ title: 'Authentication Error', message: 'User agent not available for transaction.', color: 'red' });
+                setIsSubmittingForm(false);
+                return;
+            }
+            if (!missionInputData.maxTotalCompletions?.[0] || missionInputData.maxTotalCompletions[0] <= 0n) {
+                notifications.show({ title: 'Validation Error', message: 'Max total completions must be a positive number for token rewards.', color: 'red' });
+                setIsSubmittingForm(false);
+                return;
+            }
+
+            const fundingNotificationId = 'funding-mission-transfer';
+
+            try {
+                const tokenCanisterId = missionInputData.rewardType.ICPToken.canisterId;
+                const tokenActor = await createActor(tokenCanisterId, icrc1IDLFactory, agent);
+
+                const [fee, decimals] = await Promise.all([
+                    tokenActor.icrc1_fee() as Promise<bigint>,
+                    tokenActor.icrc1_decimals() as Promise<number>,
+                ]);
+
+                const singleRewardAmount = missionInputData.minRewardAmount * (10n ** BigInt(decimals));
+                const maxCompletions = missionInputData.maxTotalCompletions[0];
+                const totalRewardAmount = singleRewardAmount * maxCompletions;
+                const totalFees = fee * (maxCompletions + 1n); // +1 for the initial deposit
+                const totalTransferAmount = totalRewardAmount + totalFees;
+
+                const missionIdToUse = missionInputData.id ?? BigInt(Date.now());
+
+                // Replicate backend subaccount generation logic
+                const missionIdText = missionIdToUse.toString();
+                const encoder = new TextEncoder();
+                const prefixBytes = encoder.encode("konecta-mission");
+                const missionIdBytes = encoder.encode(missionIdText);
+                const combinedBytes = new Uint8Array(prefixBytes.length + missionIdBytes.length);
+                combinedBytes.set(prefixBytes);
+                combinedBytes.set(missionIdBytes, prefixBytes.length);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBytes);
+                const subaccount = new Uint8Array(32);
+                subaccount.set(new Uint8Array(hashBuffer));
+
+                const toAccount = {
+                    owner: Principal.fromText(projectId),
+                    subaccount: [subaccount],
+                };
+
+                const transferArgs = {
+                    from_subaccount: [],
+                    to: toAccount,
+                    amount: totalTransferAmount,
+                    fee: [fee],
+                    memo: [],
+                    created_at_time: [],
+                };
+
+                notifications.show({
+                    id: fundingNotificationId,
+                    title: 'Funding Mission...',
+                    message: `Please approve the transfer of ${Number(totalTransferAmount) / (10 ** decimals)} tokens to fund this mission.`,
+                    color: 'blue',
+                    loading: true,
+                    autoClose: false,
+                });
+
+                const transferResult = await tokenActor.icrc1_transfer(transferArgs) as { Ok: bigint } | { Err: any };
+
+                if ('Err' in transferResult) {
+                    throw new Error(`Token transfer failed: ${JSON.stringify(transferResult.Err)}`);
+                }
+
+                notifications.update({
+                    id: fundingNotificationId,
+                    title: 'Funding Successful!',
+                    message: 'Mission has been funded. Now creating the mission on-chain.',
+                    color: 'green',
+                    loading: false,
+                    autoClose: 4000,
+                });
+
+            } catch (e) {
+                const error = e as Error;
+                console.error("Mission funding failed:", error);
+                notifications.update({
+                    id: fundingNotificationId,
+                    title: 'Funding Failed',
+                    message: error.message || 'An unknown error occurred during the token transfer.',
+                    color: 'red',
+                    loading: false,
+                    autoClose: 8000,
+                });
+                setIsSubmittingForm(false);
+                return; // Stop the process
+            }
+        }
+
         setIsSubmittingForm(true);
 
         try {
@@ -390,19 +493,19 @@ const MissionsPage: React.FC = () => {
 
     const handleDeleteMission = async (missionId: bigint) => {
         setIsLoadingDelete(true);
-        
+
         if (!projectId || !projectActor) {
             notifications.show({ title: 'Error', message: 'Project actor or Project ID context is missing.', color: 'red' });
             return;
         }
-        
+
         try {
             const result = await projectActor.deleteMission(missionId) as Result_1;
-            
+
             if (result && 'err' in result) {
                 throw new Error(String(result.err));
             }
-            
+
             await fetchMissions();
         } catch (e) {
             const error = e as Error;
@@ -476,7 +579,7 @@ const MissionsPage: React.FC = () => {
             <Table.Td>
                 <Group gap={4} justify="flex-end" wrap="nowrap">
                     <Tooltip label="View Details" withArrow><ActionIcon variant="subtle" onClick={() => handleOpenViewModal(mission)}><IconEye size={16} /></ActionIcon></Tooltip>
-                    <Tooltip label="Edit Mission" withArrow><ActionIcon variant="subtle" color="blue" onClick={() => handleOpenEditModal(mission)}><IconPencil size={16} /></ActionIcon></Tooltip>
+                    <Tooltip label="Edit Mission" withArrow><ActionIcon variant="subtle" color="blue" onClick={() => handleOpenEditModal(mission)} disabled={loadingActionDefinitions}><IconPencil size={16} /></ActionIcon></Tooltip>
                     <Tooltip label="Delete Mission" withArrow><ActionIcon variant="subtle" color="red" loading={isLoadingDelete} onClick={() => handleDeleteMission(mission.id)}><IconTrash size={16} /></ActionIcon></Tooltip>
                 </Group>
             </Table.Td>
@@ -498,7 +601,13 @@ const MissionsPage: React.FC = () => {
         <Box p="md">
             <Group justify="space-between" mb="xl">
                 <Title order={2}>Missions {projectId && <Text span c="blue" inherit> (Project: {projectId.substring(0, 5)}...)</Text>}</Title>
-                <Button leftSection={<IconPlus size={16} />} onClick={handleOpenCreateModal}> Create Mission </Button>
+                <Button
+                    leftSection={<IconPlus size={16} />}
+                    onClick={handleOpenCreateModal}
+                    disabled={loadingActionDefinitions}
+                >
+                    {loadingActionDefinitions ? 'Loading Actions...' : 'Create Mission'}
+                </Button>
             </Group>
 
             {error && missions.length > 0 && /* Show non-critical error if missions are already displayed */
@@ -551,16 +660,6 @@ const MissionsPage: React.FC = () => {
                 id={viewingMission ? viewingMission.id : null}
                 projectId={projectId}
             />
-            
-            {/*
-            <MissionDeleteModal
-                opened={isDeleteModalOpen}
-                onClose={handleCloseDeleteModal}
-                onSubmit={handleDeleteMission}
-                id={deletingMission ? deletingMission.id : null}
-                projectId={projectId}
-            />
-            */}
 
             {generatedCodeInfo && (
                 <Modal

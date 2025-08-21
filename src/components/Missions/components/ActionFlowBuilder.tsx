@@ -304,7 +304,7 @@ const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         paramDef={paramDef} // Make sure LiteralValueInput also handles paramDef.dataType correctly if needed
                         valueJson={valueSourceToRender.valueJson}
                         onChange={(newValueJson) => {
-                            if (newValueJson) updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: JSON.parse(newValueJson)! });
+                            if (newValueJson) updateBinding(paramDef.name, { type: 'LiteralValue', valueJson: newValueJson });
                         }}
                     />
                 )}

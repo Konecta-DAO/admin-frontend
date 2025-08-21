@@ -16,7 +16,7 @@ import { MissionStatus as BackendMissionStatus, RewardType, SerializedMission } 
 import { SerializedActionDefinition } from '../../../declarations/actionsCanister/actions.did.js';
 import { prepareActionFlowForBackend } from '../utils.ts';
 
-const NANO_PER_MILLISECOND = 1_000_000; // For time conversions
+const NANO_PER_MILLISECOND = 1_000_000n; // Use BigInt for precision
 
 export interface FileUploads {
     iconFile?: File | null;
@@ -39,7 +39,7 @@ export interface MissionFormValues {
     rewardTypeSelection: 'Points' | 'ICPToken' | 'TIME' | 'None';
     rewardIcpCanisterId?: string;
     rewardIcpMemo?: string;
-    startTime: Date | null;
+    startTime: Date; // No longer nullable as it's required
     endTime?: Date | null;
     status: FormMissionStatus; // Changed to use the string union type for form state
     imageUrl?: string;
@@ -74,7 +74,8 @@ const schema = z.object({
     name: z.string().min(3, 'Name must be at least 3 characters long'),
     description: z.string().min(1, 'Description is required'),
     actionFlow: z.custom<ActionFlow>(
-        (val) => val !== undefined && val.steps.length > 0,
+        // Made validator safer
+        (val) => !!val && Array.isArray(val.steps) && val.steps.length > 0,
         "Action flow must have at least one step"
     ),
     minRewardAmount: z.number().min(0, 'Min reward must be non-negative'),
@@ -82,7 +83,7 @@ const schema = z.object({
     rewardTypeSelection: z.enum(['Points', 'ICPToken', 'TIME', 'None'], { required_error: "Reward type is required" }),
     rewardIcpCanisterId: z.string().optional(),
     rewardIcpMemo: z.string().refine(val => !val || /^\d+$/.test(val), { message: "Memo must be a non-negative integer string" }).optional(),
-    startTime: z.date({ message: "Start time is required" }).nullable(),
+    startTime: z.date({ required_error: "Start time is required" }), // No longer nullable
     endTime: z.date().nullable().optional(),
     status: z.enum(missionStatusOptions, { required_error: "Status is required" }),
     // URL fields are no longer direct inputs
@@ -120,6 +121,14 @@ const schema = z.object({
 }, {
     message: "Recursive cooldown (ms) is required and must be positive if mission is recursive.",
     path: ['recursiveTimeCooldown'],
+}).refine(data => {
+    if (data.rewardTypeSelection === 'ICPToken' && (!data.maxTotalCompletions || data.maxTotalCompletions <= 0)) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Max Total Completions is required and must be positive for token rewards.",
+    path: ['maxTotalCompletions'],
 });
 
 const getDefaultActionFlow = (): ActionFlow => ({
@@ -136,6 +145,7 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isClient, setIsClient] = useState(false);
     const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+    const [submissionAttempted, setSubmissionAttempted] = useState(false);
 
     useEffect(() => {
         setIsClient(true);
@@ -168,6 +178,7 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
     useEffect(() => {
         if (opened) {
             setIsSubmittingForm(false);
+            setSubmissionAttempted(false);
             form.setErrors({}); // Clear all errors, including root
 
             // Check if editing an existing mission
@@ -232,8 +243,8 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                     rewardTypeSelection: currentRewardTypeSelection,
                     rewardIcpCanisterId: currentRewardIcpCanisterId,
                     rewardIcpMemo: currentRewardIcpMemo,
-                    startTime: initialMissionData.startTime ? new Date(Number(initialMissionData.startTime) / NANO_PER_MILLISECOND) : new Date(),
-                    endTime: initialMissionData.endTime[0] !== undefined ? new Date(Number(initialMissionData.endTime[0]) / NANO_PER_MILLISECOND) : null,
+                    startTime: initialMissionData.startTime ? new Date(Number(initialMissionData.startTime) / Number(NANO_PER_MILLISECOND)) : new Date(),
+                    endTime: initialMissionData.endTime[0] !== undefined ? new Date(Number(initialMissionData.endTime[0]) / Number(NANO_PER_MILLISECOND)) : null,
                     status: formStatus,
                     imageUrl: initialMissionData.imageUrl[0] ?? '',
                     iconUrl: initialMissionData.iconUrl[0] ?? '',
@@ -246,7 +257,7 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                         : 'All',
                     isRecursive: initialMissionData.isRecursive,
                     recursiveTimeCooldown: initialMissionData.recursiveTimeCooldown[0] !== undefined
-                        ? Number(initialMissionData.recursiveTimeCooldown[0]) / NANO_PER_MILLISECOND
+                        ? Number(initialMissionData.recursiveTimeCooldown[0]) / Number(NANO_PER_MILLISECOND)
                         : undefined,
                     maxCompletionsPerUser: initialMissionData.maxCompletionsPerUser[0] !== undefined
                         ? Number(initialMissionData.maxCompletionsPerUser[0])
@@ -292,6 +303,8 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
     };
 
     const handleActualFormSubmit = async (values: MissionFormValues) => {
+        console.log("--- handleActualFormSubmit triggered ---");
+        console.log("Form values at submission:", JSON.parse(JSON.stringify(values, (key, value) => typeof value === 'bigint' ? value.toString() : value)));
         setIsSubmittingForm(true);
 
         const {
@@ -355,9 +368,9 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
 
         const dataToSubmit = {
             ...missionFormValuesBase,
-            startTime: values.startTime ? BigInt(values.startTime.getTime() * NANO_PER_MILLISECOND) : 0n,
+            startTime: BigInt(values.startTime.getTime()) * NANO_PER_MILLISECOND, // Safe now that startTime is required
             endTime: ((values.endTime)
-                ? [BigInt(values.endTime.getTime() * NANO_PER_MILLISECOND)]
+                ? [BigInt(values.endTime.getTime()) * NANO_PER_MILLISECOND]
                 : []) as [bigint] | [],
             actionFlowJson: JSON.stringify(backendReadyActionFlow, null, 2),
             rewardType: finalBackendRewardType,
@@ -377,7 +390,7 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                 : []) as [] | [{ All: null } | { Any: null }], // Explicit cast here
             isRecursive: values.isRecursive,
             recursiveTimeCooldown: ((values.recursiveTimeCooldown !== undefined && values.recursiveTimeCooldown !== null)
-                ? [BigInt(Math.round(values.recursiveTimeCooldown * NANO_PER_MILLISECOND))]
+                ? [BigInt(Math.round(values.recursiveTimeCooldown)) * NANO_PER_MILLISECOND]
                 : []) as [bigint] | [],
             maxCompletionsPerUser: ((values.maxCompletionsPerUser !== undefined && values.maxCompletionsPerUser !== null)
                 ? [BigInt(values.maxCompletionsPerUser)]
@@ -398,15 +411,28 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                 ...(missionIdForSubmission !== undefined ? { id: missionIdForSubmission } : {}),
                 ...dataToSubmit,
             };
-
+            console.log("Payload being sent to parent onSubmit:", JSON.parse(JSON.stringify(submissionPayload, (key, value) => typeof value === 'bigint' ? value.toString() : value)));
             await onSubmit(submissionPayload as any, filesToUpload); // Cast to any if strict type checking on Omit keys is too complex here
 
         } catch (e) {
             console.error("Submission failed:", e);
-            // Consider setting a form-level error: form.setErrors({ root: 'Submission failed. Please try again.' });
+            // Set a root error on the form for visibility
+            form.setErrors({ root: `Submission failed: ${e instanceof Error ? e.message : 'Please try again.'}` });
         } finally {
+            console.log("--- handleActualFormSubmit finished ---");
             setIsSubmittingForm(false);
         }
+    };
+
+    const handleValidationErrors = (errors: typeof form.errors) => {
+        console.log("--- Form validation FAILED ---");
+        console.error("Validation errors object:", errors);
+        notifications.show({
+            title: 'Invalid Form Data',
+            message: 'Please review the form. Some fields have errors that need to be corrected before submission.',
+            color: 'red',
+            icon: <IconAlertCircle />,
+        });
     };
 
     const isEditing = existingMissionId !== undefined && existingMissionId !== null;
@@ -422,7 +448,12 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
             scrollAreaComponent={ScrollArea.Autosize}
             styles={{ body: { paddingTop: 'var(--mantine-spacing-lg)', paddingBottom: 'var(--mantine-spacing-lg)' } }}
         >
-            <form onSubmit={form.onSubmit(handleActualFormSubmit)}>
+            <form
+                onSubmit={(e) => {
+                    setSubmissionAttempted(true); // Mark that a submission has been tried
+                    form.onSubmit(handleActualFormSubmit, handleValidationErrors)(e);
+                }}
+            >
                 <Stack gap="lg">
                     <Title order={4}>Basic Information</Title>
                     <TextInput required label="Mission Name" placeholder="e.g., Daily Login Bonus" {...form.getInputProps('name')} />
@@ -481,14 +512,20 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
 
                     <Divider label="Scheduling & Behavior" labelPosition="center" my="md" />
                     <Group grow>
-                        <DateTimePicker clearable label="Start Time" placeholder="Mission start date and time" {...form.getInputProps('startTime')} required />
+                        <DateTimePicker label="Start Time" placeholder="Mission start date and time" {...form.getInputProps('startTime')} required />
                         <DateTimePicker clearable label="End Time (Optional)" placeholder="Mission end date and time" minDate={form.values.startTime || undefined} {...form.getInputProps('endTime')} />
                     </Group>
                     <Checkbox label="Is this a recursive mission?" {...form.getInputProps('isRecursive', { type: 'checkbox' })} />
                     {form.values.isRecursive && <NumberInput label="Recursive Cooldown (in milliseconds)" placeholder="e.g., 86400000 for 1 day" min={1} {...form.getInputProps('recursiveTimeCooldown')} required={form.values.isRecursive} />}
                     <Group grow>
                         <NumberInput label="Max Completions Per User (Optional)" min={1} {...form.getInputProps('maxCompletionsPerUser')} />
-                        <NumberInput label="Max Total Completions (Optional)" min={1} {...form.getInputProps('maxTotalCompletions')} />
+                        <NumberInput
+                            label="Max Total Completions"
+                            description={form.values.rewardTypeSelection === 'ICPToken' ? "Required to pre-fund token rewards" : "Optional limit for this mission"}
+                            min={1}
+                            {...form.getInputProps('maxTotalCompletions')}
+                            required={form.values.rewardTypeSelection === 'ICPToken'}
+                        />
                     </Group>
                     <TagsInput
                         label="Required Previous Mission IDs (Optional, numeric)"
@@ -535,7 +572,14 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                     />
                     <NumberInput label="Priority (Optional, for ordering)" min={0} {...form.getInputProps('priority')} />
 
-                    {form.errors.root && <Alert color="red" title="Submission Error">{form.errors.root}</Alert>}
+                    {/* Display for root-level form errors */}
+                    {form.errors.root && <Alert color="red" title="Submission Error" icon={<IconAlertCircle />}>{form.errors.root}</Alert>}
+
+                    {submissionAttempted && !form.isValid() && (
+                        <Alert color="red" title="Validation Errors" icon={<IconAlertCircle />} mt="md" withCloseButton onClose={() => setSubmissionAttempted(false)}>
+                            There are errors in the form that need to be corrected. Please scroll up and review the highlighted fields.
+                        </Alert>
+                    )}
 
                     <Group justify="flex-end" mt="xl">
                         <Button variant="default" onClick={onClose} disabled={isSubmittingForm}>Cancel</Button>
