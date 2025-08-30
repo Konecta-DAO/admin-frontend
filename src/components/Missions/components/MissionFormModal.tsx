@@ -506,8 +506,8 @@ const MissionFormModal: React.FC<MissionFormModalProps> = ({
                         </>
                     )}
                     <Group grow>
-                        <NumberInput required label="Min Reward Amount" min={0} {...form.getInputProps('minRewardAmount')} />
-                        <NumberInput label="Max Reward Amount (Optional)" min={form.values.minRewardAmount || 0} {...form.getInputProps('maxRewardAmount')} />
+                        <NumberInput required label={form.values.rewardTypeSelection === "ICPToken" ? "Min Reward Amount [1 ICP = 100,000,000]" : "Min Reward Amount"} min={0} {...form.getInputProps('minRewardAmount')} />
+                        <NumberInput label={form.values.rewardTypeSelection === "ICPToken" ? "Max Reward Amount (Optional) [1 ICP = 100,000,000]" : "Max Reward Amount (Optional)"} min={form.values.minRewardAmount || 0} {...form.getInputProps('maxRewardAmount')} />
                     </Group>
 
                     <Divider label="Scheduling & Behavior" labelPosition="center" my="md" />

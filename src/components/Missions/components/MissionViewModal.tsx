@@ -80,7 +80,13 @@ const MissionViewModal: React.FC<MissionViewModalProps> = ({
 
     // MODIFIED renderRewardText
     const renderRewardText = (rewardType: RewardType, amountMin: number, amountMax?: number) => {
-        let amountText = amountMax && amountMax > amountMin ? `${amountMin}-${amountMax}` : `${amountMin}`;
+        const amountMinDef = Object.keys(rewardType)[0] as keyof RewardType === 'ICPToken' ? (amountMin / 100000000).toString() : amountMin.toString();
+        const amountMaxDef = amountMax ?
+            (Object.keys(rewardType)[0] as keyof RewardType === 'ICPToken'
+            ? (amountMax / 100000000).toString()
+            : amountMax.toString())
+            : undefined;
+        let amountText = amountMax && amountMax > amountMin ? `${amountMinDef}-${amountMaxDef}` : `${amountMinDef}`;
         const typeKey = Object.keys(rewardType)[0] as keyof RewardType; // Get the discriminant (e.g., "Points", "ICPToken")
 
         switch (typeKey) {

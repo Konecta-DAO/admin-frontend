@@ -269,6 +269,8 @@ const MissionsPage: React.FC = () => {
 
         const isEditing = missionInputData.id !== undefined && missionInputData.id !== null;
 
+        let missionIdIcp = null;
+
         // --- PRE-FUNDING LOGIC FOR NEW TOKEN MISSIONS ---
         if (missionInputData.rewardType && 'ICPToken' in missionInputData.rewardType && !isEditing) {
             setIsSubmittingForm(true); // Set loading state immediately
@@ -294,13 +296,22 @@ const MissionsPage: React.FC = () => {
                     tokenActor.icrc1_decimals() as Promise<number>,
                 ]);
 
-                const singleRewardAmount = missionInputData.minRewardAmount * (10n ** BigInt(decimals));
+                const singleRewardAmount = missionInputData.minRewardAmount; // * (10n ** BigInt(decimals));
                 const maxCompletions = missionInputData.maxTotalCompletions[0];
                 const totalRewardAmount = singleRewardAmount * maxCompletions;
                 const totalFees = fee * (maxCompletions + 1n); // +1 for the initial deposit
                 const totalTransferAmount = totalRewardAmount + totalFees;
 
+                /*
+                console.log("Mission Reward:", missionInputData.minRewardAmount, "->", singleRewardAmount);
+                console.log("Fee:", fee);
+                console.log("Total Fee:", totalFees);
+                console.log("Total Reward:", totalRewardAmount);
+                console.log("Total Transfer:", totalTransferAmount);
+                */
+
                 const missionIdToUse = missionInputData.id ?? BigInt(Date.now());
+                missionIdIcp = missionIdToUse;
 
                 // Replicate backend subaccount generation logic
                 const missionIdText = missionIdToUse.toString();
@@ -386,7 +397,8 @@ const MissionsPage: React.FC = () => {
                 notifications.show({ id: 'image-upload', title: "Processing Banner...", message: "Preparing banner for upload.", color: 'blue', loading: true, autoClose: 2000 });
             }
 
-            const missionIdToUse: bigint = missionInputData.id ?? // ID from form (if creating with specific ID)
+            const missionIdToUse: bigint = missionIdIcp ?? // ID from ICP funding step (if applicable)
+                missionInputData.id ?? // ID from form (if creating with specific ID)
                 editingMission?.id ??      // ID from existing mission being edited
                 BigInt(Date.now());       // Fallback for new mission if no ID on form (adjust if backend assigns IDs)
 
@@ -530,7 +542,13 @@ const MissionsPage: React.FC = () => {
 
     const renderRewardText = (rewardType: RewardType, amountMin: bigint, amountMaxOpt?: [] | [bigint]) => {
         const amountMax = (amountMaxOpt && amountMaxOpt.length > 0) ? amountMaxOpt[0] : undefined;
-        let amountText = (amountMax && amountMax > amountMin) ? `${amountMin}-${amountMax}` : `${amountMin}`;
+        const amountMinDef = Object.keys(rewardType)[0] as keyof RewardType === 'ICPToken' ? (Number(amountMin) / 100000000).toString()  : Number(amountMin).toString();
+        const amountMaxDef = amountMax ?
+            (Object.keys(rewardType)[0] as keyof RewardType === 'ICPToken'
+            ? (Number(amountMax) / 100000000).toString()
+            : Number(amountMax).toString())
+            : undefined;
+        let amountText = (amountMax && amountMax > amountMin) ? `${amountMinDef}-${amountMaxDef}` : `${amountMinDef}`;
         const typeKey = Object.keys(rewardType)[0] as keyof RewardType;
 
         switch (typeKey) {
